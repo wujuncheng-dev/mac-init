@@ -1,0 +1,10 @@
+(version 1)
+(allow default)
+(deny file-write*)
+; Bash 3.2 uses /tmp for heredocs; all persistent test output stays in TEST_DIR.
+(allow file-write*
+  (subpath (param "TEST_DIR"))
+  (subpath "/private/tmp")
+  (subpath "/tmp")
+  (subpath "/dev/fd")
+  (literal "/dev/null"))

@@ -3,7 +3,14 @@ set -Eeuo pipefail
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { printf '错误：%s\n' "$*" >&2; exit 1; }
-trap 'printf "失败位置：第 %s 行（退出码 %s）\n" "$LINENO" "$?" >&2' ERR
+trap 'status=$?; printf "命令失败（退出码 %s）：%s\n" "$status" "$BASH_COMMAND" >&2' ERR
+clt_marker_owned=0
+installer_file=
+cleanup() {
+  if [[ "$clt_marker_owned" -eq 1 ]]; then rm -f "$clt_marker"; fi
+  if [[ -n "$installer_file" ]]; then rm -f "$installer_file"; fi
+}
+trap cleanup EXIT
 
 [[ "$(uname -s)" == Darwin ]] || die "此脚本仅适用于 macOS。"
 [[ "$(uname -m)" == arm64 ]] || die "此脚本仅适用于 Apple 芯片 Mac。"
@@ -19,12 +26,6 @@ for url in https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh \
     --location --head --connect-timeout 10 --max-time 25 "$url" >/dev/null \
     || die "终端无法访问 $url。请先连接 VPN，并确认终端的代理/DNS 设置。"
 done
-
-# A stock Mac requires administrator authorization. Never stop for a password.
-sudo -n true 2>/dev/null || die "当前终端没有免交互管理员授权。需由管理员预配免密 sudo，或在运行前执行 sudo -v；脚本无法绕过 macOS 身份验证。"
-(while sudo -n -v >/dev/null 2>&1; do sleep 60; done) &
-sudo_keepalive_pid=$!
-trap 'kill "$sudo_keepalive_pid" 2>/dev/null || true' EXIT
 
 ZSHRC="$HOME/.zshrc"
 touch "$ZSHRC"
@@ -50,28 +51,35 @@ if [[ -z "$clt_version" ]]; then
 fi
 macos_major=$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d . -f 1)
 clt_major=${clt_version%%.*}
-if [[ "$clt_ready" -eq 0 || ( -n "$clt_version" && "$clt_major" =~ ^[0-9]+$ && "$clt_major" -lt "$macos_major" ) ]]; then
+if [[ "$clt_ready" -eq 0 || -z "$clt_version" \
+  || ( "$clt_major" =~ ^[0-9]+$ && "$clt_major" -lt "$macos_major" ) ]]; then
   # Software Update can install CLT without opening the xcode-select GUI.
   clt_marker=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
   [[ ! -e "$clt_marker" ]] || die "检测到其他 Command Line Tools 安装任务：$clt_marker"
-  sudo -n touch "$clt_marker"
+  touch "$clt_marker"
+  clt_marker_owned=1
   clt_list="$(LC_ALL=C /usr/sbin/softwareupdate --list 2>&1)" || {
-    sudo -n rm -f "$clt_marker"
     die "无法查询 Command Line Tools 更新。"
   }
   clt_label="$(printf '%s\n' "$clt_list" \
     | /usr/bin/awk '/Command Line Tools/ && !/[Bb]eta/ && (/Label: / || /^[[:space:]]*\*/) { sub(/^.*Label: /, ""); sub(/^[[:space:]]*\*[[:space:]]*/, ""); print }' \
     | /usr/bin/tail -n 1)"
-  sudo -n rm -f "$clt_marker"
-  [[ -n "$clt_label" ]] || die "Apple 软件更新未提供适用于 macOS $macos_major 的 Command Line Tools 静默安装包。"
-  sudo -n /usr/sbin/softwareupdate --install "$clt_label"
-  sudo -n /usr/bin/xcode-select --switch /Library/Developer/CommandLineTools
+  rm -f "$clt_marker"
+  clt_marker_owned=0
+  if [[ -n "$clt_label" ]]; then
+    sudo /usr/sbin/softwareupdate --install "$clt_label" || die "Command Line Tools 安装失败：$clt_label"
+    if ! xcrun --find clang >/dev/null 2>&1; then
+      sudo /usr/bin/xcode-select --switch /Library/Developer/CommandLineTools
+    fi
+  elif [[ "$clt_ready" -eq 0 || -n "$clt_version" ]]; then
+    die "Apple 软件更新未提供适用于 macOS $macos_major 的 Command Line Tools 静默安装包。"
+  fi
   xcrun --find clang >/dev/null 2>&1 || die "Command Line Tools 安装后 clang 仍不可用。"
 fi
 
 log "安装 Rosetta 2"
-if ! /usr/bin/pkgutil --pkg-info com.apple.pkg.RosettaUpdateAuto >/dev/null 2>&1; then
-  sudo -n /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+if ! /usr/sbin/pkgutil --pkg-info com.apple.pkg.RosettaUpdateAuto >/dev/null 2>&1; then
+  /usr/sbin/softwareupdate --install-rosetta --agree-to-license
 fi
 
 log "安装或配置 Homebrew"
@@ -82,7 +90,14 @@ elif [[ -x /opt/homebrew/bin/brew ]]; then
 elif [[ -x /usr/local/bin/brew ]]; then
   BREW_BIN=/usr/local/bin/brew
 else
-  NONINTERACTIVE=1 /bin/bash -c "$(curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  installer_file=$(mktemp "${TMPDIR:-/tmp}/homebrew-install.XXXXXX")
+  curl --proto '=https' --tlsv1.2 -fsSL \
+    https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$installer_file"
+  # Homebrew's noninteractive installer will not prompt for sudo itself.
+  sudo -v
+  NONINTERACTIVE=1 /bin/bash "$installer_file"
+  rm -f "$installer_file"
+  installer_file=
   if [[ -x /opt/homebrew/bin/brew ]]; then
     BREW_BIN=/opt/homebrew/bin/brew
   elif [[ -x /usr/local/bin/brew ]]; then

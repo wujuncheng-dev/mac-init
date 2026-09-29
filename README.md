@@ -5,12 +5,12 @@
 ## 前置条件
 
 - Apple 芯片 Mac；终端已连接外网（需要 VPN 时先连接）。
-- 管理员账号；首次运行前需完成一次 `sudo` 身份验证。脚本不会绕过 macOS 授权。部分系统若不提供命令行工具的静默安装包，需先由管理员或 MDM 预装。
+- 管理员账号；只有安装或更新系统级组件时，macOS 才会要求输入密码。部分系统若不提供命令行工具的静默安装包，需先由管理员或 MDM 预装。
 
 ## 快速使用
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/wujuncheng-dev/mac-init/main/init-mac.sh -o init-mac.sh && sudo -v && bash init-mac.sh
+curl -fsSL https://raw.githubusercontent.com/wujuncheng-dev/mac-init/main/init-mac.sh -o init-mac.sh && bash init-mac.sh
 ```
 
 ## 后置条件

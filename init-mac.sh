@@ -62,8 +62,10 @@ start_log() {
 # Run in the foreground, preserving stdin/TTY for genuine administrator authentication.
 # The heartbeat only reports elapsed time; it never manipulates sudo credentials.
 run() {
-  local title=$1 started=$SECONDS status=0
+  local title=$1 started=$SECONDS status=0 command_log
   shift
+  command_log=$(mktemp "$WORK_DIR/command.XXXXXX") || return 1
+  printf '%s\t%s\n' "$command_log" "$title" >> "$WORK_DIR/commands.tsv"
   log 执行 "$title"
   (
     sleeper=
@@ -72,11 +74,11 @@ run() {
       sleep "$HEARTBEAT_SECONDS" &
       sleeper=$!
       wait "$sleeper" || exit 0
-      log 等待 "${title}，已用 $((SECONDS - started)) 秒；原始输出持续显示中"
+      log 等待 "${title}，已用 $((SECONDS - started)) 秒"
     done
   ) &
   ACTIVE_PID=$!
-  "$@" || status=$?
+  "$@" > "$command_log" 2>&1 || status=$?
   kill "$ACTIVE_PID" 2>/dev/null || :
   wait "$ACTIVE_PID" 2>/dev/null || :
   ACTIVE_PID=
@@ -84,6 +86,13 @@ run() {
     log 成功 "${title}（$((SECONDS - started)) 秒）"
   else
     log 失败 "${title}（退出码 ${status}，$((SECONDS - started)) 秒）"
+    log 信息 "完整错误日志：$command_log"
+    if [[ -s "$command_log" ]]; then
+      log 信息 '命令输出（最后 40 行）：'
+      /usr/bin/tail -n 40 "$command_log"
+    else
+      log 信息 '命令未提供错误输出。'
+    fi
   fi
   return "$status"
 }

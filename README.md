@@ -10,7 +10,7 @@ Apple 芯片 Mac 开发环境初始化。补装 Git、搜索、下载、网络�
 curl -fsSL https://raw.githubusercontent.com/wujuncheng-dev/mac-init/main/init-mac.sh -o init-mac.sh && /bin/bash init-mac.sh
 ```
 
-彩色阶段状态、原始命令输出和每 15 秒耗时提示实时显示；完整日志及 zshrc 备份保存在 `~/Library/Logs/mac-init/run-*`。独立软件失败后继续处理其他项目，最后汇总；有失败项时退出码为 1。`NO_COLOR=1` 可关闭颜色。
+终端只显示彩色阶段状态和每 15 秒耗时提示；命令失败时展示最后 40 行原始输出。完整输出保存在 `~/Library/Logs/mac-init/run-*` 的 `command.*` 文件，`commands.tsv` 对应任务名称，`run.log` 保存状态日志；zshrc 备份也在该目录。独立软件失败后继续处理其他项目，最后汇总；有失败项时退出码为 1。`NO_COLOR=1` 可关闭颜色。
 
 ```sh
 /bin/bash init-mac.sh --check   # 只读检查现有安装和配置

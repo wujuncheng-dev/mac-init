@@ -125,7 +125,13 @@ done
 if (( ${#missing_formulae[@]} > 0 )); then
   brew install --formula -y "${missing_formulae[@]}"
 fi
-git lfs install
+if [[ "$(git config --global --get filter.lfs.process || true)" == 'git-lfs filter-process' ]] \
+  && [[ "$(git config --global --get filter.lfs.clean || true)" == 'git-lfs clean -- %f' ]] \
+  && [[ "$(git config --global --get filter.lfs.smudge || true)" == 'git-lfs smudge -- %f' ]]; then
+  log "已配置，跳过：Git LFS"
+else
+  git lfs install --global --skip-repo
+fi
 
 log "安装 iTerm2"
 if brew list --cask --versions iterm2 >/dev/null 2>&1 \
@@ -137,7 +143,11 @@ fi
 
 log "将 iTerm2 设为常见脚本文件的默认打开程序"
 for ext in command tool zsh csh pl; do
-  duti -s com.googlecode.iterm2 "$ext" all
+  if [[ "$(duti -x "$ext" 2>/dev/null | /usr/bin/tail -n 1)" == com.googlecode.iterm2 ]]; then
+    log "已配置，跳过：.$ext"
+  else
+    duti -s com.googlecode.iterm2 "$ext" all
+  fi
 done
 
 log "安装 Rust 官方 rustup"
@@ -153,8 +163,8 @@ fi
 if ! rustup default | /usr/bin/grep -q '^stable-'; then
   rustup default stable
 fi
-if ! rustup target list --installed | /usr/bin/grep -Fxq riscv32i-unknown-none-elf; then
-  rustup target add riscv32i-unknown-none-elf
+if ! rustup target list --toolchain stable --installed | /usr/bin/grep -Fxq riscv32i-unknown-none-elf; then
+  rustup target add --toolchain stable riscv32i-unknown-none-elf
 fi
 
 log "验证"
@@ -162,5 +172,5 @@ brew --version
 git --version
 rustc --version
 cargo --version
-rustup target list --installed
+rustup target list --toolchain stable --installed
 printf '\n初始化完成。新开的 zsh 窗口会自动加载 ~/.zshrc。\n'

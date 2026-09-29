@@ -180,20 +180,37 @@ lfs_configured() {
   [[ "$(git config --global --get filter.lfs.process 2>/dev/null)" == 'git-lfs filter-process' ]] \
     && [[ "$(git config --global --get filter.lfs.required 2>/dev/null)" == true ]]
 }
-install_formulae() {
+select_pending_formulae() {
   local formula index=0
-  log 阶段 '[4/7] 命令行工具'
-  if ! load_inventory; then fail '无法读取本地安装清单'; return 1; fi
+  PENDING_FORMULAE=()
   for formula in "${FORMULAE[@]}"; do
     index=$((index + 1))
     if contains "$INVENTORY" "$formula"; then
       log 跳过 "[$index/${#FORMULAE[@]}] $formula 已安装"
-    elif run "[$index/${#FORMULAE[@]}] 安装 $formula" "$BREW_BIN" install --formula -y "$formula"; then
-      load_inventory || { fail '安装后无法刷新本地清单'; return 1; }
     else
-      fail "软件安装失败：${formula}；继续处理其他独立项目"
+      PENDING_FORMULAE+=("$formula")
+      log 信息 "[$index/${#FORMULAE[@]}] 待安装 $formula"
     fi
   done
+}
+install_formulae() {
+  local formula
+  log 阶段 '[4/7] 命令行工具'
+  if ! load_inventory; then fail '无法读取本地安装清单'; return 1; fi
+  select_pending_formulae
+  if (( ${#PENDING_FORMULAE[@]} )); then
+    export HOMEBREW_DOWNLOAD_CONCURRENCY=${HOMEBREW_DOWNLOAD_CONCURRENCY:-auto}
+    log 信息 "批量安装 ${#PENDING_FORMULAE[@]} 个软件；下载并发：$HOMEBREW_DOWNLOAD_CONCURRENCY"
+    run '批量安装缺失软件（Homebrew 并发下载）' "$BREW_BIN" install --formula -y "${PENDING_FORMULAE[@]}" \
+      || fail 'Homebrew 批量安装返回失败，详见错误日志；将核验实际安装结果'
+    load_inventory || { fail '批量安装后无法刷新本地清单'; return 1; }
+    for formula in "${PENDING_FORMULAE[@]}"; do
+      if contains "$INVENTORY" "$formula"; then log 成功 "$formula 已登记安装"
+      else fail "$formula 未安装；修复错误后重跑会跳过已安装项目"; fi
+    done
+  else
+    log 跳过 '命令行工具均已安装'
+  fi
   if lfs_configured; then
     log 跳过 'Git LFS 全局过滤器已配置'
   elif command -v git-lfs >/dev/null 2>&1; then

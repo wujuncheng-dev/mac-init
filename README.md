@@ -2,6 +2,8 @@
 
 Apple 芯片 Mac 开发环境初始化。补装 Git、搜索、下载、网络等清单工具，配置 Rosetta、iTerm2、Rust stable / RISC-V 与 zsh 历史记录。已安装项目跳过，默认不执行 `brew update` 或 `brew upgrade`。
 
+缺失的命令行工具使用一条 `brew install` 批量安装，默认由 Homebrew 自动决定下载并发；可用 `HOMEBREW_DOWNLOAD_CONCURRENCY=8 /bin/bash init-mac.sh` 指定并发连接数。批量命令失败后核验已安装结果，并继续后续阶段。
+
 ## 快速使用
 
 前置条件：Apple 芯片、终端可访问 GitHub/Homebrew/Rust；系统组件缺失时可能要求管理员密码。

@@ -7,6 +7,21 @@ source "$REPO_DIR/init-mac.sh"
 WORK_DIR=$(mktemp -d "$MAC_INIT_TEST_DIR/smoke.XXXXXX")
 HEARTBEAT_SECONDS=1
 assert() { "$@" || { printf 'FAIL: %s\n' "$*" >&2; exit 1; }; }
+# Exercise the real selection logic with explicit inventory data, without invoking an installer.
+saved_formulae=("${FORMULAE[@]}")
+FORMULAE=(git gh git-delta)
+INVENTORY=$'git\ngit-delta'
+select_pending_formulae > "$WORK_DIR/selection.log"
+assert test "${#PENDING_FORMULAE[@]}" = 1
+assert test "${PENDING_FORMULAE[0]}" = gh
+INVENTORY=$'git\ngh\ngit-delta'
+select_pending_formulae > "$WORK_DIR/selection.log"
+assert test "${#PENDING_FORMULAE[@]}" = 0
+INVENTORY=
+select_pending_formulae > "$WORK_DIR/selection.log"
+assert test "${PENDING_FORMULAE[*]}" = 'git gh git-delta'
+FORMULAE=("${saved_formulae[@]}")
+printf 'PASS: 批量安装清单筛选（部分安装、全部安装、空清单）\n'
 run '真实命令输出与心跳' /bin/bash -c 'echo stdout-marker; echo stderr-marker >&2; sleep 2' > "$WORK_DIR/live.log" 2>&1
 assert test "$(grep -c stdout-marker "$WORK_DIR/live.log")" = 0
 assert test "$(grep -c stderr-marker "$WORK_DIR/live.log")" = 0

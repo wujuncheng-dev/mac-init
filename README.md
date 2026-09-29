@@ -15,4 +15,4 @@ curl -fsSL https://raw.githubusercontent.com/wujuncheng-dev/mac-init/main/init-m
 
 ## 后置条件
 
-脚本结束时会显示 Homebrew、Git、Rust 版本及已安装的 Rust 目标。打开新的 zsh 窗口即可使用更新后的环境变量。安装失败时脚本会停止并显示错误，可修复后重跑。
+脚本会跳过已安装的清单软件；结束时显示 Homebrew、Git、Rust 版本及已安装的 Rust 目标。打开新的 zsh 窗口即可使用更新后的环境变量。安装失败时脚本会停止并显示错误，可修复后重跑。

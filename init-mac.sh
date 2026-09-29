@@ -36,23 +36,12 @@ add_zshrc_line() {
 }
 
 log "安装 Xcode Command Line Tools"
-clt_ready=0
-if xcode-select -p >/dev/null 2>&1 && xcrun --find clang >/dev/null 2>&1; then
-  clt_ready=1
-fi
-clt_version=$(/usr/sbin/pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null \
-  | /usr/bin/awk '/^version: / {print $2}' || true)
-if [[ -z "$clt_version" ]]; then
-  if command -v brew >/dev/null 2>&1; then
-    clt_version=$(brew config | /usr/bin/awk -F ': ' '/^CLT: / {print $2}')
-  elif [[ -x /opt/homebrew/bin/brew ]]; then
-    clt_version=$(/opt/homebrew/bin/brew config | /usr/bin/awk -F ': ' '/^CLT: / {print $2}')
-  fi
-fi
-macos_major=$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d . -f 1)
-clt_major=${clt_version%%.*}
-if [[ "$clt_ready" -eq 0 || -z "$clt_version" \
-  || ( "$clt_major" =~ ^[0-9]+$ && "$clt_major" -lt "$macos_major" ) ]]; then
+if xcrun --find clang >/dev/null 2>&1; then
+  log "已安装，跳过：Command Line Tools"
+elif [[ -x /Library/Developer/CommandLineTools/usr/bin/clang ]]; then
+  sudo /usr/bin/xcode-select --switch /Library/Developer/CommandLineTools
+  xcrun --find clang >/dev/null 2>&1 || die "已检测到 Command Line Tools，但 xcode-select 路径修复后仍不可用。"
+else
   # Software Update can install CLT without opening the xcode-select GUI.
   clt_marker=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
   [[ ! -e "$clt_marker" ]] || die "检测到其他 Command Line Tools 安装任务：$clt_marker"
@@ -71,8 +60,8 @@ if [[ "$clt_ready" -eq 0 || -z "$clt_version" \
     if ! xcrun --find clang >/dev/null 2>&1; then
       sudo /usr/bin/xcode-select --switch /Library/Developer/CommandLineTools
     fi
-  elif [[ "$clt_ready" -eq 0 || -n "$clt_version" ]]; then
-    die "Apple 软件更新未提供适用于 macOS $macos_major 的 Command Line Tools 静默安装包。"
+  else
+    die "Apple 软件更新未提供 Command Line Tools 静默安装包。请从 Apple Developer 下载并安装与当前 macOS 匹配的版本。"
   fi
   xcrun --find clang >/dev/null 2>&1 || die "Command Line Tools 安装后 clang 仍不可用。"
 fi
@@ -114,13 +103,6 @@ eval "$("$BREW_BIN" shellenv)"
 log "更新 Homebrew 软件目录"
 brew update
 export HOMEBREW_NO_ASK=1 HOMEBREW_NO_INSTALL_UPGRADE=1 HOMEBREW_NO_AUTO_UPDATE=1
-
-# Homebrew knows which CLT release its current macOS version requires.
-brew_clt_version=$(brew config | /usr/bin/awk -F ': ' '/^CLT: / {print $2}')
-brew_clt_major=${brew_clt_version%%.*}
-if [[ ! "$brew_clt_major" =~ ^[0-9]+$ || "$brew_clt_major" -lt "$macos_major" ]]; then
-  die "当前 Command Line Tools 为 ${brew_clt_version:-未知版本}，不支持 macOS $macos_major。请先安装适配版本后重跑。"
-fi
 
 log "安装开发依赖与命令行工具"
 formulae=(

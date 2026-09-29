@@ -4,7 +4,8 @@ set -Eeuo pipefail
 
 FORMULAE=(pkgconf openssl@3 git gh git-delta git-lfs lazygit tig diff-so-fancy hub ugit
   fd ast-grep the_silver_searcher bat tree tldr aria2 wget yt-dlp cloudflared caddy
-  mkcert trippy jq hyperfine pandoc tokei sshpass wakeonlan trufflehog duti zsh-autosuggestions)
+  mkcert trippy jq hyperfine pandoc tokei sshpass wakeonlan trufflehog duti zsh-autosuggestions
+  zsh-history-substring-search zsh-syntax-highlighting)
 TARGET=riscv32i-unknown-none-elf
 FAILURES=()
 WARNINGS=()
@@ -235,7 +236,7 @@ setup_iterm() {
   if language=$(chinese_resource "$app"); then
     run '设置 iTerm2 简体中文界面偏好（重启应用后生效）' defaults write com.googlecode.iterm2 AppleLanguages -array "$language" en || fail 'iTerm2 语言偏好设置失败'
   else
-    warn '此版本 iTerm2 未包含简体中文界面资源，无法原生汉化菜单；终端中文 UTF-8 与脚本中文日志仍可使用。'
+    log 信息 '保留 iTerm2 现有语言偏好；终端中文由 zsh 的 UTF-8 配置提供。'
   fi
 }
 shell_block() {
@@ -249,17 +250,35 @@ if [[ -d "$HOME/.cargo/bin" ]]; then
   export PATH="$HOME/.cargo/bin:$PATH"
 fi
 HISTFILE="$HOME/.zsh_history"
-HISTSIZE=60000
+HISTSIZE=50000
 SAVEHIST=50000
 unsetopt INC_APPEND_HISTORY INC_APPEND_HISTORY_TIME
 setopt APPEND_HISTORY SHARE_HISTORY EXTENDED_HISTORY HIST_FCNTL_LOCK
 setopt HIST_IGNORE_ALL_DUPS HIST_SAVE_NO_DUPS HIST_IGNORE_SPACE
+setopt HIST_EXPIRE_DUPS_FIRST HIST_REDUCE_BLANKS
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
 if [[ -o interactive && -r /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]]; then
-  source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+  if (( ! $+functions[_zsh_autosuggest_start] )); then
+    source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+  fi
 fi
-# Locale changes affect supported CLI messages, not untranslated iTerm2 menus.
-if [[ "$TERM_PROGRAM" == iTerm.app ]]; then
-  export LANG=zh_CN.UTF-8
+if [[ -o interactive && -r /opt/homebrew/share/zsh-history-substring-search/zsh-history-substring-search.zsh ]]; then
+  if (( ! $+functions[history-substring-search-up] )); then
+    source /opt/homebrew/share/zsh-history-substring-search/zsh-history-substring-search.zsh
+  fi
+  bindkey '^[[A' history-substring-search-up
+  bindkey '^[[B' history-substring-search-down
+fi
+# Match the source Mac's terminal locale; keep iTerm2 menu preferences separate.
+export LANG=zh_CN.UTF-8
+export LC_CTYPE=zh_CN.UTF-8
+unset LC_ALL
+# Load highlighting after the history widgets.
+if [[ -o interactive && -r /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]]; then
+  if (( ! $+functions[_zsh_highlight] )); then
+    source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+  fi
 fi
 # <<< mac-init <<<
 ZSH
@@ -316,7 +335,7 @@ check_installation() {
   done
   if app=$(iterm_path); then
     log 成功 "iTerm2：$app"
-    if ! chinese_resource "$app" >/dev/null; then warn '此版本 iTerm2 未包含简体中文界面资源，无法原生汉化菜单；终端中文 UTF-8 与脚本中文日志仍可使用。'; fi
+    log 信息 'iTerm2 界面语言保留应用现有偏好；中文终端配置单独核验。'
   else fail 'iTerm2 未安装'; fi
   if [[ -x "$HOME/.cargo/bin/rustup" ]]; then export PATH="$HOME/.cargo/bin:$PATH"; fi
   if command -v rustup >/dev/null 2>&1; then

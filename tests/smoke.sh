@@ -39,7 +39,7 @@ write_zshrc "$ZSHRC" "$WORK_DIR/candidate"
 assert cmp -s "$ZSHRC" "$WORK_DIR/first"
 assert grep -q 'MAC_INIT_TEST_VALUE=keep' "$ZSHRC"
 assert test "$(grep -c '^# >>> mac-init >>>$' "$ZSHRC")" = 1
-/bin/zsh -f -c 'source "$1"; [[ "$MAC_INIT_TEST_VALUE" == keep && "$HISTSIZE" == 60000 && "$SAVEHIST" == 50000 && -o sharehistory && -o histignorespace && ! -o incappendhistory ]]' _ "$ZSHRC"
+/bin/zsh -f -c 'source "$1"; [[ "$MAC_INIT_TEST_VALUE" == keep && "$HISTSIZE" == 50000 && "$SAVEHIST" == 50000 && -o sharehistory && -o histignorespace && -o histreduceblanks && -o histexpiredupsfirst && ! -o incappendhistory && "$LANG" == zh_CN.UTF-8 && "$LC_CTYPE" == zh_CN.UTF-8 && ! ${+LC_ALL} == 1 && "$ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE" == fg=8 && "${ZSH_AUTOSUGGEST_STRATEGY[*]}" == "history completion" ]]' _ "$ZSHRC"
 printf '# >>> mac-init >>>\n' > "$WORK_DIR/broken"
 cp "$WORK_DIR/broken" "$WORK_DIR/broken.before"
 if write_zshrc "$WORK_DIR/broken" "$WORK_DIR/candidate"; then printf 'FAIL: accepted broken marker\n'; exit 1; fi
@@ -81,3 +81,11 @@ for logfile in "$WORK_DIR/persistent-log"/run-*/command.*; do
   assert grep -q saved-stderr "$logfile"
 done
 printf 'PASS: 终端只显示状态，原始 stdout/stderr 完整持久保存\n'
+if [[ -r /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh &&
+      -r /opt/homebrew/share/zsh-history-substring-search/zsh-history-substring-search.zsh &&
+      -r /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]]; then
+  /bin/zsh -f -i -c 'source "$1"; source "$1"; (( $+functions[_zsh_autosuggest_start] && $+functions[history-substring-search-up] && $+functions[_zsh_highlight] )) || exit 1; [[ "$(bindkey "^[[A")" == *history-substring-search-up && "$(bindkey "^[[B")" == *history-substring-search-down ]] || exit 1; HISTFILE=/dev/null; SAVEHIST=0' _ "$ZSHRC"
+  printf 'PASS: 本机真实 zsh 插件加载、重复加载保护及方向键绑定\n'
+else
+  printf 'SKIP: 本机缺少插件文件，未验证交互插件加载\n'
+fi
